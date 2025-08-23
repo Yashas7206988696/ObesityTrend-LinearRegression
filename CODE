@@ -1,0 +1,69 @@
+import pandas as pd
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+from sklearn.metrics import mean_squared_error, r2_score
+import os
+import numpy as np
+
+
+#please do not run this part of the cell, the file is already uploaded
+from google.colab import files
+files.upload()
+
+df = pd.read_csv("Nutrition__Physical_Activity__and_Obesity_-_Behavioral_Risk_Factor_Surveillance_System.csv")
+df.head()
+
+df_filtered = df[df['Class'].isin(['Obesity / Weight Status', 'Fruits and Vegetables', 'Physical Activity'])]
+df_pivoted = df_filtered.pivot_table(index=['YearStart', 'LocationDesc', 'Stratification1'],
+                                     columns='Question', values='Data_Value', aggfunc='mean').reset_index()
+
+# Step 2: Define predictors and target (adjust if column names vary slightly)
+predictors = [
+    'Percent of adults who report consuming fruit less than one time daily',  # Food
+    'Percent of adults who report consuming vegetables less than one time daily',  # Food
+    'Percent of adults who engage in no leisure-time physical activity'  # Exercise
+    # Add 'Percent of adults who report consuming sugar-sweetened beverages' for drinks if available
+]
+target = 'Percent of adults aged 18 years and older who have obesity'
+
+# Step 3: Prepare data and impute missing values
+df_model = df_pivoted.dropna(subset=[target])
+from sklearn.impute import SimpleImputer
+imputer = SimpleImputer(strategy='mean')
+X = imputer.fit_transform(df_model[predictors])
+y = df_model[target]
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+
+model = LinearRegression()
+model.fit(X_train, y_train)
+
+# Step 6: Predict and evaluate
+y_pred = model.predict(X_test)
+r2 = r2_score(y_test, y_pred)
+rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+print(f"R² Score: {r2:.3f}")  # Proportion of variance explained (aim for 0.4–0.6)
+print(f"RMSE: {rmse:.3f}")  # Average error in % (lower is better, e.g., 5–10)
+
+# Step 7: Coefficients (impact of each predictor)
+for feature, coef in zip(predictors, model.coef_):
+    print(f"Coefficient for {feature}: {coef:.3f}")
+
+# Step 8: Example predictions [low fruit %, low veg %, no activity %]
+examples = [[20, 15, 10], [40, 35, 25]]  # Healthier vs. poorer habits
+for ex in examples:
+    pred = model.predict([ex])
+    print(f"Predicted obesity rate for {ex}: {pred[0]:.2f}%")
+
+
+plt.figure(figsize=(8, 6))
+plt.scatter(y_test, y_pred, color='red', label='Predicted vs Actual')
+plt.plot([y.min(), y.max()], [y.min(), y.max()], 'r--',color='blue', label='Perfect Prediction')
+plt.xlabel('Actual Obesity Rate (%)')
+plt.ylabel('Predicted Obesity Rate (%)')
+plt.title('Actual vs Predicted Obesity Rate')
+plt.legend()
+plt.show()
+
